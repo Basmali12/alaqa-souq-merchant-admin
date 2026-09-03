@@ -92,9 +92,26 @@ function Offers({ session }: { session: Session }) {
 }
 
 function Orders({ session }: { session: Session }) {
-  const rows = useQuery(fn("merchant:listOrders"), sessionArgs(session)) as any[] | undefined; const setStatus = useMutation(fn("merchant:setOrderStatus"));
-  if (!rows) return <State text="جارٍ تحميل الطلبات…"/>; if (!rows.length) return <State text="لا توجد طلبات حتى الآن"/>;
-  return <section><div className="toolbar"><h2>الطلبات</h2></div><div className="cards">{rows.map(order => <article id={`order-${order.orderId}`} className={`item order ${order.orderId === orderFromUrl ? "highlight" : ""}`} key={order.orderId}><div className="grow"><h3>طلب #{order.orderId.slice(0, 8)}</h3><p>{order.summary || "طلب جديد"}</p>{order.total != null && <strong>{order.total.toLocaleString("ar-IQ")} د.ع</strong>}<small>{new Date(order.createdAt).toLocaleString("ar-IQ")}</small></div><span className={`order-status ${order.status}`}>{order.status}</span>{order.status === "new" && <div className="actions"><button onClick={() => setStatus({ ...sessionArgs(session), orderId: order.orderId, status: "accepted" })}>قبول</button><button className="danger" onClick={() => setStatus({ ...sessionArgs(session), orderId: order.orderId, status: "cancelled" })}>إلغاء</button></div>}{order.status === "accepted" && <button onClick={() => setStatus({ ...sessionArgs(session), orderId: order.orderId, status: "completed" })}>إكمال</button>}</article>)}</div></section>;
+  const rows = useQuery(fn("merchant:listOrders"), sessionArgs(session)) as any[] | undefined;
+  const setStatus = useMutation(fn("merchant:setOrderStatus"));
+  const [group, setGroup] = useState("new");
+  const [expanded, setExpanded] = useState(orderFromUrl);
+  const [busy, setBusy] = useState("");
+  const [error, setError] = useState("");
+  const groups = [["new", "الطلبات الجديدة"], ["preparing", "قيد التحضير"], ["ready", "الجاهزة"], ["out_for_delivery", "الخارجة للتوصيل"], ["delivered", "المكتملة"], ["cancelled", "الملغاة"]];
+  const normalizedGroup = (status: string) => status === "accepted" ? "preparing" : status === "completed" ? "delivered" : status;
+  const statusLabel = (status: string) => ({ new: "جديد", accepted: "مقبول", preparing: "قيد التحضير", ready: "جاهز", out_for_delivery: "خرج للتوصيل", delivered: "تم التسليم", completed: "مكتمل", cancelled: "ملغي" } as Record<string,string>)[status] || status;
+  const next = (status: string) => ({ accepted: ["preparing", "بدء التحضير"], preparing: ["ready", "جاهز"], ready: ["out_for_delivery", "خرج للتوصيل"], out_for_delivery: ["delivered", "تم التسليم"] } as Record<string,[string,string]>)[status];
+  async function change(orderId: string, status: string) { setBusy(orderId); setError(""); try { await setStatus({ ...sessionArgs(session), orderId, status }); } catch (value) { setError(value instanceof Error ? value.message : "تعذر تحديث الطلب"); } finally { setBusy(""); } }
+  if (!rows) return <State text="جارٍ تحميل الطلبات…"/>;
+  if (!rows.length) return <State text="لا توجد طلبات حتى الآن"/>;
+  const visible = rows.filter(order => normalizedGroup(order.status) === group);
+  return <section><div className="toolbar"><h2>الطلبات</h2></div><div className="order-tabs">{groups.map(([id,label]) => <button className={group === id ? "active" : ""} key={id} onClick={() => setGroup(id)}>{label}<b>{rows.filter(order => normalizedGroup(order.status) === id).length}</b></button>)}</div>{error && <div className="error">{error}</div>}
+    {visible.length === 0 ? <State text="لا توجد طلبات في هذه الحالة"/> : <div className="cards">{visible.map(order => { const action = next(order.status); const open = expanded === order.orderId; return <article id={`order-${order.orderId}`} className={`item order-card ${order.orderId === orderFromUrl ? "highlight" : ""}`} key={order.orderId}>
+      <button className="order-summary" onClick={() => setExpanded(open ? "" : order.orderId)}><span><strong>طلب #{order.orderId.slice(0, 8)}</strong><small>{order.customerName || "زبون"} · {new Date(order.createdAt).toLocaleString("ar-IQ")}</small></span><b>{(order.total ?? 0).toLocaleString("ar-IQ")} د.ع</b><em>{statusLabel(order.status)}</em></button>
+      {open && <div className="order-detail"><h3>المنتجات</h3>{order.items?.length ? order.items.map((item:any) => <p key={item.productId}>{item.productName} × {item.quantity} — {(item.priceAtOrder * item.quantity).toLocaleString("ar-IQ")} د.ع</p>) : <p>{order.summary || "طلب قديم بلا تفاصيل منتجات"}</p>}<hr/><p><b>الهاتف:</b> {order.phone || "غير مسجل"}</p><p><b>العنوان:</b> {order.address || "غير مسجل"}</p>{order.notes && <p><b>الملاحظات:</b> {order.notes}</p>}<p><b>الدفع:</b> الدفع عند الاستلام</p>{order.latitude != null && order.longitude != null && <a className="map-link" href={`geo:${order.latitude},${order.longitude}?q=${order.latitude},${order.longitude}`} target="_blank" rel="noreferrer">فتح موقع الزبون</a>}
+        <div className="actions">{order.status === "new" && <><button disabled={busy === order.orderId} onClick={() => change(order.orderId, "accepted")}>قبول</button><button className="danger" disabled={busy === order.orderId} onClick={() => change(order.orderId, "cancelled")}>رفض</button></>}{action && <button disabled={busy === order.orderId} onClick={() => change(order.orderId, action[0])}>{action[1]}</button>}</div></div>}
+    </article>; })}</div>}</section>;
 }
 
 function PushAndInstall({ session }: { session: Session }) {

@@ -23,3 +23,11 @@ test("Pushy registration stores the token through Convex and never embeds the se
   assert.match(source, /window\.Pushy\.register/);
   assert.doesNotMatch(source, /SECRET_API_KEY|PUSHY_SECRET_API_KEY/);
 });
+
+test("merchant orders expose only the next valid workflow action and customer location", () => {
+  assert.match(source, /accepted: \["preparing", "بدء التحضير"\]/);
+  assert.match(source, /preparing: \["ready", "جاهز"\]/);
+  assert.match(source, /out_for_delivery: \["delivered", "تم التسليم"\]/);
+  assert.match(source, /geo:\$\{order\.latitude\},\$\{order\.longitude\}/);
+  assert.doesNotMatch(source, /status: "completed"/);
+});

@@ -1,0 +1,12 @@
+.login-logo{width:82px;height:82px;object-fit:contain;justify-self:center}
+.settings-card{padding:24px;max-width:720px}
+.toolbar.compact{justify-content:flex-start;flex-wrap:wrap}
+.install-help,.push-state{color:#52685a}
+.push-state{font-weight:700}
+.order{scroll-margin:24px}
+.order.highlight{border-color:#e1a92d;box-shadow:0 0 0 3px #f7d36c55}
+.order-status{padding:6px 10px;border-radius:999px;background:#edf4ee;font-size:13px}
+.order-status.new{background:#fff3cf;color:#7d5700}
+.order-status.accepted{background:#d9efff;color:#175b83}
+.order-status.completed{background:#dff4e5;color:#17623b}
+.order-status.cancelled{background:#fbe2df;color:#8a2b23}

@@ -29,5 +29,18 @@ test("merchant orders expose only the next valid workflow action and customer lo
   assert.match(source, /preparing: \["ready", "جاهز"\]/);
   assert.match(source, /out_for_delivery: \["delivered", "تم التسليم"\]/);
   assert.match(source, /geo:\$\{order\.latitude\},\$\{order\.longitude\}/);
+  assert.match(source, /اسم الزبون:/);
+  assert.match(source, /المحافظة:/);
+  assert.match(source, /أقرب نقطة دالة:/);
+  assert.match(source, /https:\/\/wa\.me\//);
+  assert.match(source, /مراسلة الزبون عبر واتساب/);
   assert.doesNotMatch(source, /status: "completed"/);
+});
+
+test("deleted and missing merchant accounts have explicit permanent access messages", () => {
+  assert.match(source, /MERCHANT_ACCOUNT_DELETED/);
+  assert.match(source, /MERCHANT_ACCOUNT_NOT_CREATED/);
+  assert.match(source, /تم حذف حسابك نهائيًا/);
+  assert.match(source, /الحساب لم يُنشأ بعد/);
+  assert.match(source, /merchant:accessStatus/);
 });

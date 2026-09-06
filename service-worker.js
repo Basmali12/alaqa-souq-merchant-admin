@@ -1,3 +1,6 @@
+self.addEventListener("install", () => self.skipWaiting());
+self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));
+
 self.addEventListener("push", (event) => {
   const data = event.data?.json?.() || {};
   const icon = data.icon || new URL("icons/merchant-192.png", self.registration.scope).href;

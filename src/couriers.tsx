@@ -67,7 +67,17 @@ export function Couriers({ session }: { session: MerchantSession }) {
   return <section><div className="toolbar"><div><h2>المندوبون</h2><p className="subtle">أضف المندوبين ثم اختر واحدًا عند إسناد الطلب.</p></div><button className="primary" onClick={() => setEditing("new")}>+ إضافة مندوب جديد</button></div>
     {error && <div className="error">{error}</div>}
     {rows === undefined ? <div className="state">جارٍ تحميل المندوبين…</div> : rows.length === 0 ? <div className="state">لا يوجد مندوبون بعد.</div> : <div className="cards">{rows.map(row => <article className="item courier-card" key={row.courierId}><div className="courier-avatar">{row.name.slice(0, 1)}</div><div className="grow"><h3>{row.name}</h3><p>{row.whatsapp}{row.address ? ` · ${row.address}` : ""}</p><span className={`courier-state ${row.status}`}>{row.status === "active" ? "نشط" : "مجمّد"}</span></div><div className="actions"><button onClick={() => setEditing(row)}>تعديل</button><button onClick={() => freeze({ ...merchantArgs(session), courierId: row.courierId, frozen: row.status === "active" })}>{row.status === "active" ? "تجميد" : "إلغاء التجميد"}</button><button className="danger" onClick={() => deleteCourier(row)}>حذف</button></div></article>)}</div>}
-    {editing && <CourierForm session={session} value={editing === "new" ? undefined : editing} onClose={() => setEditing(null)} onCreated={(courier, link) => { setEditing(null); setInvite({ name: courier.name, whatsapp: courier.whatsapp, link }); }}/>} 
+    {editing && (
+      <CourierForm
+        session={session}
+        value={editing === "new" ? undefined : editing}
+        onClose={() => setEditing(null)}
+        onCreated={(courier, link) => {
+          setEditing(null);
+          setInvite({ name: courier.name, whatsapp: courier.whatsapp, link });
+        }}
+      />
+    )}
     {invite && <div className="modal"><section className="panel invite-card"><header><h2>رابط المندوب جاهز</h2><button className="ghost" onClick={() => setInvite(null)}>×</button></header><p>أرسل الرابط إلى <b>{invite.name}</b>. الرابط لا يسجّل الدخول تلقائيًا؛ المندوب يثبت التطبيق ثم يدخل برقمه وكلمة السر التي عيّنتها.</p><input readOnly value={invite.link}/><div className="actions"><a className="primary link-button" target="_blank" rel="noreferrer" href={`https://wa.me/${phoneForWhatsApp(invite.whatsapp)}?text=${encodeURIComponent(`ثبّت تطبيق مندوب علاكة سوك وسجّل الدخول من هذا الرابط:\n${invite.link}`)}`}>إرسال عبر واتساب</a><button onClick={() => navigator.clipboard.writeText(invite.link)}>نسخ الرابط</button></div></section></div>}
   </section>;
 }

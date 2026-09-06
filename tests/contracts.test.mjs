@@ -3,11 +3,10 @@ import fs from "node:fs";
 import test from "node:test";
 
 const source = fs.readFileSync(new URL("../src/main.tsx", import.meta.url), "utf8");
-const courierSource = fs.readFileSync(new URL("../src/couriers.tsx", import.meta.url), "utf8");
+const courierManagement = fs.readFileSync(new URL("../src/courier-management.tsx", import.meta.url), "utf8");
 const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
 const vite = fs.readFileSync(new URL("../vite.config.ts", import.meta.url), "utf8");
 const manifest = JSON.parse(fs.readFileSync(new URL("../public/manifest.webmanifest", import.meta.url), "utf8"));
-const courierManifest = JSON.parse(fs.readFileSync(new URL("../public/courier.webmanifest", import.meta.url), "utf8"));
 const packageJson = JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url), "utf8"));
 
 test("GitHub Pages build uses relative assets and has no localhost dependency", () => {
@@ -45,13 +44,21 @@ test("merchant orders expose only the next valid workflow action and customer lo
   assert.match(source, /accepted: \["preparing", "بدء التحضير"\]/);
   assert.match(source, /preparing: \["ready", "جاهز"\]/);
   assert.match(source, /out_for_delivery: \["delivered", "تم التسليم"\]/);
-  assert.match(source, /geo:\$\{order\.latitude\},\$\{order\.longitude\}/);
+  assert.match(source, /google\.com\/maps\/search\/\?api=1&query=\$\{order\.latitude\},\$\{order\.longitude\}/);
   assert.match(source, /اسم الزبون:/);
   assert.match(source, /المحافظة:/);
   assert.match(source, /أقرب نقطة دالة:/);
   assert.match(source, /https:\/\/wa\.me\//);
   assert.match(source, /مراسلة الزبون عبر واتساب/);
   assert.doesNotMatch(source, /status: "completed"/);
+});
+
+test("merchant keeps assigned orders in outgoing for seven days and exposes delivery fee", () => {
+  assert.match(source, /\["outgoing", "الصادرة للمندوب"\]/);
+  assert.match(source, /7 \* 24 \* 60 \* 60 \* 1000/);
+  assert.match(source, /merchant:setDeliveryFee/);
+  assert.match(source, /كلفة التوصيل/);
+  assert.match(source, /Notification\.requestPermission/);
 });
 
 test("deleted and missing merchant accounts have explicit permanent access messages", () => {
@@ -74,44 +81,22 @@ test("merchant signs in by phone and can change a password of eight characters o
 
 test("merchant courier tab supports secure CRUD, invitation and order assignment", () => {
   assert.match(source, /\["couriers", "المندوبون"\]/);
-  assert.match(courierSource, /courierAuth:create/);
-  assert.match(courierSource, /courier:updateForMerchant/);
-  assert.match(courierSource, /courier:setFrozenForMerchant/);
-  assert.match(courierSource, /courier:deleteForMerchant/);
-  assert.match(courierSource, /courier:assignOrder/);
-  assert.match(courierSource, /إرسال عبر واتساب/);
-  assert.match(courierSource, /alaqa-souq-courier/);
-  assert.match(courierSource, /name="password"[^>]*minLength=\{8\}/);
-  assert.doesNotMatch(courierSource, /PUSHY_SECRET_API_KEY|SECRET_API_KEY/);
+  assert.match(courierManagement, /courierAuth:create/);
+  assert.match(courierManagement, /courier:updateForMerchant/);
+  assert.match(courierManagement, /courier:setFrozenForMerchant/);
+  assert.match(courierManagement, /courier:deleteForMerchant/);
+  assert.match(courierManagement, /courier:assignOrder/);
+  assert.match(courierManagement, /إرسال عبر واتساب/);
+  assert.match(courierManagement, /alaqa-souq-courier/);
+  assert.match(courierManagement, /name="password"[^>]*minLength=\{8\}/);
+  assert.doesNotMatch(courierManagement, /PUSHY_SECRET_API_KEY|SECRET_API_KEY/);
 });
 
-test("courier PWA persists its session and blocks the dashboard until push registration", () => {
-  assert.match(courierSource, /alaqa_courier_session/);
-  assert.match(courierSource, /alaqa_courier_push_/);
-  assert.match(courierSource, /courier:registerPushDevice/);
-  assert.match(courierSource, /تفعيل الإشعارات مطلوب/);
-  assert.match(courierSource, /if \(!pushReady\) return <NotificationGate/);
-  assert.match(courierSource, /courier:listMyOrders/);
-});
-
-test("courier has its own brand assets and requires installation before sign-in", () => {
-  assert.equal(courierManifest.name, "مندوب علاكة سوك");
-  assert.equal(courierManifest.display, "standalone");
-  assert.equal(courierManifest.icons[0].src, "./icons/courier-192.png");
-  assert.equal(courierManifest.icons[1].src, "./icons/courier-512.png");
-  assert.ok(fs.statSync(new URL("../public/icons/courier-192.png", import.meta.url)).size > 0);
-  assert.ok(fs.statSync(new URL("../public/icons/courier-512.png", import.meta.url)).size > 0);
-  assert.match(courierSource, /if \(!standalone\) return <PwaInstallGate/);
-  assert.match(courierSource, /beforeinstallprompt/);
-  assert.match(courierSource, /navigator\.serviceWorker\.register/);
-  assert.match(courierSource, /basePath\.replace\(\/\^\\\/\+\/, ""\)/);
-  assert.match(courierSource, /appId: pushyAppId, serviceWorkerFile, serviceWorkerScope: basePath/);
-  assert.match(source, /import\.meta\.env\.MODE === "courier"/);
-  assert.match(packageJson.scripts["build:courier"], /--mode courier/);
-  assert.match(vite, /courier-pwa-identity/);
-  assert.match(vite, /courier\.webmanifest/);
-  assert.match(html, /courier\.webmanifest/);
-  assert.match(html, /courier-192\.png/);
-  assert.match(courierSource, /إضافة إلى الشاشة الرئيسية/);
-  assert.match(courierSource, /افتح الرابط في Safari/);
+test("courier runtime and PWA assets are not bundled into merchant admin", () => {
+  assert.doesNotMatch(source, /CourierApp|courierMode|role=courier|alaqa_courier_session|courier:registerPushDevice/);
+  assert.equal(packageJson.scripts["build:courier"], undefined);
+  assert.equal(fs.existsSync(new URL("../src/couriers.tsx", import.meta.url)), false);
+  assert.equal(fs.existsSync(new URL("../public/courier.webmanifest", import.meta.url)), false);
+  assert.equal(fs.existsSync(new URL("../public/icons/courier-192.png", import.meta.url)), false);
+  assert.equal(fs.existsSync(new URL("../public/icons/courier-512.png", import.meta.url)), false);
 });

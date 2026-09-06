@@ -4,8 +4,8 @@ import { ConvexProvider, ConvexReactClient, useAction, useMutation, useQuery } f
 import "./styles.css";
 import "./pwa.css";
 import "./password-settings.css";
-import "./couriers.css";
-import { CourierApp, CourierAssignment, Couriers } from "./couriers";
+import { CourierAssignment, Couriers } from "./courier-management";
+import { AppUpdateNotice } from "./app-update";
 
 const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL || "https://neighborly-badger-796.convex.cloud");
 const pushyAppId = import.meta.env.VITE_PUSHY_APP_ID || "6a2b4357a8bcff6c5eaec578";
@@ -119,18 +119,20 @@ function Orders({ session }: { session: Session }) {
   const [expanded, setExpanded] = useState(orderFromUrl);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
-  const groups = [["new", "الطلبات الجديدة"], ["preparing", "قيد التحضير"], ["ready", "الجاهزة"], ["out_for_delivery", "الخارجة للتوصيل"], ["delivered", "المكتملة"], ["cancelled", "الملغاة"]];
-  const normalizedGroup = (status: string) => status === "accepted" ? "preparing" : status === "completed" ? "delivered" : status;
+  const groups = [["new", "الطلبات الجديدة"], ["preparing", "قيد التحضير"], ["ready", "الجاهزة"], ["outgoing", "الصادرة للمندوب"], ["out_for_delivery", "الخارجة للتوصيل"], ["delivered", "المكتملة"], ["cancelled", "الملغاة"]];
+  const assignedCutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  const activeRows = (rows ?? []).filter(order => !order.assignedCourierId || (order.courierAssignedAt ?? order.updatedAt) >= assignedCutoff);
+  const normalizedGroup = (order: any) => order.assignedCourierId ? "outgoing" : order.status === "accepted" ? "preparing" : order.status === "completed" ? "delivered" : order.status;
   const statusLabel = (status: string) => ({ new: "جديد", accepted: "مقبول", preparing: "قيد التحضير", ready: "جاهز", out_for_delivery: "خرج للتوصيل", delivered: "تم التسليم", completed: "مكتمل", cancelled: "ملغي" } as Record<string,string>)[status] || status;
   const next = (status: string) => ({ accepted: ["preparing", "بدء التحضير"], preparing: ["ready", "جاهز"], ready: ["out_for_delivery", "خرج للتوصيل"], out_for_delivery: ["delivered", "تم التسليم"] } as Record<string,[string,string]>)[status];
   async function change(orderId: string, status: string) { setBusy(orderId); setError(""); try { await setStatus({ ...sessionArgs(session), orderId, status }); } catch (value) { setError(value instanceof Error ? value.message : "تعذر تحديث الطلب"); } finally { setBusy(""); } }
   if (!rows) return <State text="جارٍ تحميل الطلبات…"/>;
   if (!rows.length) return <State text="لا توجد طلبات حتى الآن"/>;
-  const visible = rows.filter(order => normalizedGroup(order.status) === group);
-  return <section><div className="toolbar"><h2>الطلبات</h2></div><div className="order-tabs">{groups.map(([id,label]) => <button className={group === id ? "active" : ""} key={id} onClick={() => setGroup(id)}>{label}<b>{rows.filter(order => normalizedGroup(order.status) === id).length}</b></button>)}</div>{error && <div className="error">{error}</div>}
+  const visible = activeRows.filter(order => normalizedGroup(order) === group);
+  return <section><div className="toolbar"><h2>الطلبات</h2></div><div className="order-tabs">{groups.map(([id,label]) => <button className={group === id ? "active" : ""} key={id} onClick={() => setGroup(id)}>{label}<b>{activeRows.filter(order => normalizedGroup(order) === id).length}</b></button>)}</div>{error && <div className="error">{error}</div>}
     {visible.length === 0 ? <State text="لا توجد طلبات في هذه الحالة"/> : <div className="cards">{visible.map(order => { const action = next(order.status); const open = expanded === order.orderId; return <article id={`order-${order.orderId}`} className={`item order-card ${order.orderId === orderFromUrl ? "highlight" : ""}`} key={order.orderId}>
       <button className="order-summary" onClick={() => setExpanded(open ? "" : order.orderId)}><span><strong>طلب #{order.orderId.slice(0, 8)}</strong><small>{order.customerName || "زبون"} · {new Date(order.createdAt).toLocaleString("ar-IQ")}</small></span><b>{(order.total ?? 0).toLocaleString("ar-IQ")} د.ع</b><em>{statusLabel(order.status)}</em></button>
-      {open && <div className="order-detail"><h3>المنتجات</h3>{order.items?.length ? order.items.map((item:any) => <p key={item.productId}>{item.productName} × {item.quantity} — {(item.priceAtOrder * item.quantity).toLocaleString("ar-IQ")} د.ع</p>) : <p>{order.summary || "طلب قديم بلا تفاصيل منتجات"}</p>}<hr/><p><b>اسم الزبون:</b> {order.customerName || "غير مسجل"}</p><p><b>رقم الهاتف:</b> {order.phone || "غير مسجل"}</p><p><b>المحافظة:</b> {order.province || "غير مسجلة"}</p><p><b>أقرب نقطة دالة:</b> {order.landmark || "غير مسجلة"}</p><p><b>العنوان:</b> {order.address || "غير مسجل"}</p>{order.notes && <p><b>الملاحظات:</b> {order.notes}</p>}<p><b>الدفع:</b> الدفع عند الاستلام</p>{whatsappLink(order.phone) && <a className="map-link" href={whatsappLink(order.phone)} target="_blank" rel="noreferrer">مراسلة الزبون عبر واتساب</a>}{order.latitude != null && order.longitude != null && <a className="map-link" href={`geo:${order.latitude},${order.longitude}?q=${order.latitude},${order.longitude}`} target="_blank" rel="noreferrer">فتح موقع الزبون</a>}<CourierAssignment session={session} order={order}/>
+      {open && <div className="order-detail"><h3>المنتجات</h3>{order.items?.length ? <div className="order-products">{order.items.map((item:any) => <div className="order-product" key={item.productId}>{item.imageUrl ? <img src={item.imageUrl} alt=""/> : <span className="product-image-placeholder">صورة</span>}<p><b>{item.productName}</b><small>{item.quantity} × {item.priceAtOrder.toLocaleString("ar-IQ")} د.ع</small></p><strong>{(item.priceAtOrder * item.quantity).toLocaleString("ar-IQ")} د.ع</strong></div>)}</div> : <p>{order.summary || "طلب قديم بلا تفاصيل منتجات"}</p>}<p><b>المجموع:</b> {(order.subtotal ?? order.total ?? 0).toLocaleString("ar-IQ")} د.ع</p><p><b>كلفة التوصيل:</b> {(order.deliveryFee ?? 0).toLocaleString("ar-IQ")} د.ع</p><hr/><p><b>اسم الزبون:</b> {order.customerName || "غير مسجل"}</p><p><b>رقم الهاتف:</b> {order.phone || "غير مسجل"}</p><p><b>المحافظة:</b> {order.province || "غير مسجلة"}</p><p><b>أقرب نقطة دالة:</b> {order.landmark || "غير مسجلة"}</p><p><b>العنوان:</b> {order.address || "غير مسجل"}</p>{order.notes && <p><b>الملاحظات:</b> {order.notes}</p>}<p><b>الدفع:</b> الدفع عند الاستلام</p>{whatsappLink(order.phone) && <a className="map-link" href={whatsappLink(order.phone)} target="_blank" rel="noreferrer">مراسلة الزبون عبر واتساب</a>}{order.latitude != null && order.longitude != null && <a className="map-link" href={`https://www.google.com/maps/search/?api=1&query=${order.latitude},${order.longitude}`} target="_blank" rel="noreferrer">فتح موقع الزبون</a>}<CourierAssignment session={session} order={order}/>
         <div className="actions">{order.status === "new" && <><button disabled={busy === order.orderId} onClick={() => change(order.orderId, "accepted")}>قبول</button><button className="danger" disabled={busy === order.orderId} onClick={() => change(order.orderId, "cancelled")}>رفض</button></>}{action && <button disabled={busy === order.orderId} onClick={() => change(order.orderId, action[0])}>{action[1]}</button>}</div></div>}
     </article>; })}</div>}</section>;
 }
@@ -141,6 +143,9 @@ function PushAndInstall({ session }: { session: Session }) {
   async function enablePush() {
     setPushState("جارٍ طلب الإذن…");
     try {
+      if (!("Notification" in window)) throw new Error("هذا المتصفح لا يدعم الإشعارات");
+      const permission = Notification.permission === "granted" ? "granted" : await Notification.requestPermission();
+      if (permission !== "granted") throw new Error("يجب السماح بالإشعارات من إعدادات المتصفح ثم المحاولة مجددًا");
       if (!window.Pushy) throw new Error("تعذر تحميل خدمة الإشعارات");
       const basePath = new URL(import.meta.env.BASE_URL, location.href).pathname; const serviceWorkerFile = `${basePath.replace(/^\/+/, "")}service-worker.js`;
       const deviceToken = await window.Pushy.register({ appId: pushyAppId, serviceWorkerFile, serviceWorkerScope: basePath });
@@ -170,7 +175,12 @@ function PasswordSettings({ session, onChanged }: { session: Session; onChanged:
 }
 
 function MerchantSettings({ session, onPasswordChanged }: { session: Session; onPasswordChanged: () => void }) {
-  return <div className="settings-stack"><PasswordSettings session={session} onChanged={onPasswordChanged}/><PushAndInstall session={session}/></div>;
+  const dashboard = useQuery(fn("merchant:dashboard"), sessionArgs(session)) as any;
+  const setDeliveryFee = useMutation(fn("merchant:setDeliveryFee"));
+  const [fee, setFee] = useState(0); const [saved, setSaved] = useState("");
+  useEffect(() => { if (dashboard) setFee(dashboard.deliveryFee ?? 0); }, [dashboard?.deliveryFee]);
+  async function saveFee() { setSaved(""); await setDeliveryFee({ ...sessionArgs(session), deliveryFee: fee }); setSaved("تم حفظ كلفة التوصيل للطلبات الجديدة."); }
+  return <div className="settings-stack"><section className="panel settings-card"><h2>كلفة التوصيل</h2><p>تُضاف تلقائيًا إلى إجمالي الطلب الجديد وتظهر للزبون والتاجر والمندوب.</p><label>كلفة التوصيل بالدينار<input type="number" min="0" max="100000" step="250" value={fee} onChange={event => setFee(Number(event.target.value))}/></label><button className="primary" onClick={saveFee}>حفظ كلفة التوصيل</button>{saved && <div className="success">{saved}</div>}</section><PasswordSettings session={session} onChanged={onPasswordChanged}/><PushAndInstall session={session}/></div>;
 }
 
 function State({ text }: { text: string }) { return <div className="state">{text}</div>; }
@@ -195,13 +205,7 @@ function App() {
   const [session, setSession] = useState<Session | null>(initial); const [notice, setNotice] = useState(""); const signOut = useAction(fn("merchantAuth:signOut")); const unregister = useMutation(fn("merchant:unregisterPushDevice"));
   async function logout() { if (session) { try { await unregister({ ...sessionArgs(session), deviceId: deviceId() }); } catch {} try { await signOut({ sessionToken: session.sessionToken }); } catch {} } localStorage.removeItem("alaqa_merchant_session"); setSession(null); }
   function passwordChanged() { localStorage.removeItem("alaqa_merchant_session"); setNotice("تم تغيير كلمة المرور. سجّل الدخول بالكلمة الجديدة."); setSession(null); }
-  return session ? <AccountAccess session={session} onLogout={logout} onPasswordChanged={passwordChanged}/> : <Login onDone={value => { setNotice(""); setSession(value); }} notice={notice}/>;
+  return <><AppUpdateNotice/>{session ? <AccountAccess session={session} onLogout={logout} onPasswordChanged={passwordChanged}/> : <Login onDone={value => { setNotice(""); setSession(value); }} notice={notice}/>}</>;
 }
 
-const courierMode = import.meta.env.MODE === "courier" || urlParams.get("role") === "courier";
-if (courierMode) {
-  document.title = "مندوب علاكة سوك";
-  document.querySelector<HTMLLinkElement>('link[rel="manifest"]')?.setAttribute("href", "./courier.webmanifest");
-  document.querySelector<HTMLLinkElement>('link[rel="icon"]')?.setAttribute("href", "./icons/courier-192.png");
-}
-createRoot(document.getElementById("root")!).render(<React.StrictMode><ConvexProvider client={convex}>{courierMode ? <CourierApp/> : <App/>}</ConvexProvider></React.StrictMode>);
+createRoot(document.getElementById("root")!).render(<React.StrictMode><ConvexProvider client={convex}><App/></ConvexProvider></React.StrictMode>);

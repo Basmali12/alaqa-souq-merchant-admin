@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { ConvexProvider, ConvexReactClient, useAction, useMutation, useQuery } from "convex/react";
 import "./styles.css";
 import "./pwa.css";
+import "./password-settings.css";
 
 const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL || "https://neighborly-badger-796.convex.cloud");
 const pushyAppId = import.meta.env.VITE_PUSHY_APP_ID || "6a2b4357a8bcff6c5eaec578";
@@ -26,7 +27,8 @@ function merchantErrorMessage(error: unknown) {
   if (value.includes("MERCHANT_ACCOUNT_DELETED")) return deletedAccountMessage;
   if (value.includes("MERCHANT_ACCOUNT_NOT_CREATED")) return "الحساب لم يُنشأ بعد.";
   if (value.includes("MERCHANT_ACCOUNT_SUSPENDED")) return "الحساب موقوف من الإدارة.";
-  if (value.includes("INVALID_MERCHANT_CREDENTIALS")) return "اسم المستخدم أو كلمة المرور غير صحيحة.";
+  if (value.includes("INVALID_MERCHANT_PHONE")) return "رقم الهاتف غير صحيح.";
+  if (value.includes("INVALID_MERCHANT_CREDENTIALS")) return "رقم الهاتف أو كلمة المرور غير صحيحة.";
   return "تعذر تسجيل الدخول";
 }
 
@@ -37,13 +39,13 @@ function deviceId() {
   return value;
 }
 
-function Login({ onDone }: { onDone: (value: Session) => void }) {
+function Login({ onDone, notice }: { onDone: (value: Session) => void; notice?: string }) {
   const signIn = useAction(fn("merchantAuth:signIn"));
   const [busy, setBusy] = useState(false); const [error, setError] = useState("");
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true); setError(""); const data = new FormData(event.currentTarget);
     try {
-      const result = await signIn({ username: String(data.get("username")), password: String(data.get("password")) }) as Session;
+      const result = await signIn({ phone: String(data.get("phone")), password: String(data.get("password")) }) as Session;
       if (storeFromUrl && result.storeId !== storeFromUrl) throw new Error("هذا الحساب لا يملك المتجر المطلوب");
       localStorage.setItem("alaqa_merchant_session", JSON.stringify(result)); onDone(result);
     } catch (error) { setError(merchantErrorMessage(error)); }
@@ -52,7 +54,8 @@ function Login({ onDone }: { onDone: (value: Session) => void }) {
   return <main className="login"><form className="panel login-card" onSubmit={submit}>
     <img className="login-logo" src="./icons/icon-192.png" alt="علاكة سوق"/><p className="eyebrow">علاكة سوق</p><h1>دخول التاجر</h1>
     <p>الرابط يساعد على تحديد المتجر فقط؛ ملكية الحساب تُفحص من الخادم.</p>
-    <label>اسم المستخدم<input name="username" autoComplete="username" required/></label>
+    {notice && <div className="success">{notice}</div>}
+    <label>رقم الهاتف<input name="phone" type="tel" inputMode="tel" autoComplete="tel" required placeholder="07xxxxxxxxx"/></label>
     <label>كلمة المرور<input name="password" type="password" autoComplete="current-password" required/></label>
     {error && <div className="error">{error}</div>}<button className="primary" disabled={busy}>{busy ? "جارٍ التحقق…" : "دخول آمن"}</button>
   </form></main>;
@@ -146,28 +149,51 @@ function PushAndInstall({ session }: { session: Session }) {
   return <section className="panel settings-card"><h2>الجهاز والإشعارات</h2><p>فعّل الإشعارات لاستلام تنبيه مختصر عند وصول طلب جديد لمتجرك فقط.</p><div className="toolbar compact"><button className="primary" onClick={enablePush}>تفعيل إشعارات الطلبات</button>{installPrompt && <button className="ghost" onClick={install}>تثبيت لوحة الإدارة</button>}</div>{!installPrompt && <p className="install-help">يمكن تثبيت اللوحة من خيار «إضافة إلى الشاشة الرئيسية» في المتصفح.</p>}{pushState && <p className="push-state">{pushState}</p>}</section>;
 }
 
+function PasswordSettings({ session, onChanged }: { session: Session; onChanged: () => void }) {
+  const changePassword = useAction(fn("merchantAuth:changePassword"));
+  const [busy, setBusy] = useState(false); const [error, setError] = useState("");
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setBusy(true); setError(""); const form = new FormData(event.currentTarget);
+    const currentPassword = String(form.get("currentPassword")); const newPassword = String(form.get("newPassword"));
+    if (newPassword !== String(form.get("confirmPassword"))) { setError("تأكيد كلمة المرور غير مطابق."); setBusy(false); return; }
+    try {
+      await changePassword({ ...sessionArgs(session), currentPassword, newPassword });
+      onChanged();
+    } catch (cause) {
+      const value = cause instanceof Error ? cause.message : String(cause);
+      setError(value.includes("INVALID_CURRENT_PASSWORD") ? "كلمة المرور الحالية غير صحيحة." : value.includes("PASSWORD_TOO_SHORT") ? "كلمة المرور الجديدة يجب أن تكون 8 أحرف أو أرقام على الأقل." : "تعذر تغيير كلمة المرور.");
+    } finally { setBusy(false); }
+  }
+  return <section className="panel settings-card"><h2>تغيير كلمة المرور</h2><p>يمكن أن تكون أرقامًا أو أحرفًا أو رموزًا، والمطلوب 8 خانات على الأقل.</p><form className="password-form" onSubmit={submit}><label>كلمة المرور الحالية<input name="currentPassword" type="password" autoComplete="current-password" required/></label><label>كلمة المرور الجديدة<input name="newPassword" type="password" autoComplete="new-password" minLength={8} required/></label><label>تأكيد كلمة المرور<input name="confirmPassword" type="password" autoComplete="new-password" minLength={8} required/></label>{error && <div className="error">{error}</div>}<button className="primary" disabled={busy}>{busy ? "جارٍ التغيير…" : "تغيير كلمة المرور"}</button></form></section>;
+}
+
+function MerchantSettings({ session, onPasswordChanged }: { session: Session; onPasswordChanged: () => void }) {
+  return <div className="settings-stack"><PasswordSettings session={session} onChanged={onPasswordChanged}/><PushAndInstall session={session}/></div>;
+}
+
 function State({ text }: { text: string }) { return <div className="state">{text}</div>; }
 
-function Dashboard({ session, onLogout }: { session: Session; onLogout: () => void }) {
+function Dashboard({ session, onLogout, onPasswordChanged }: { session: Session; onLogout: () => void; onPasswordChanged: () => void }) {
   const store = useQuery(fn("merchant:dashboard"), sessionArgs(session)) as any; const setOpen = useMutation(fn("merchant:setOpen")); const [tab, setTab] = useState(orderFromUrl ? "orders" : "home");
   useEffect(() => { if (tab === "orders" && orderFromUrl) setTimeout(() => document.getElementById(`order-${orderFromUrl}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 100); }, [tab]);
   if (store === undefined) return <State text="جارٍ التحقق من ملكية المتجر…"/>;
-  return <div className="app"><aside><div className="identity">{store.imageUrl ? <img src={store.imageUrl} alt=""/> : <div className="logo">ع</div>}<div><h1>{store.name}</h1><p>{store.ownerName}</p></div><span className={`status ${store.status}`}>{store.status}</span></div><nav>{[["home", "الرئيسية"], ["products", "المنتجات"], ["offers", "عروض اليوم"], ["orders", "الطلبات"], ["settings", "إعدادات المتجر"]].map(([id, label]) => <button key={id} className={tab === id ? "active" : ""} onClick={() => setTab(id)}>{label}</button>)}</nav><button className="logout" onClick={onLogout}>تسجيل الخروج</button></aside><main><header className="page-head"><div><p className="eyebrow">لوحة التاجر</p><h2>{store.name}</h2></div><label className="switch"><input type="checkbox" checked={store.isOpen} disabled={store.status !== "active"} onChange={event => setOpen({ ...sessionArgs(session), isOpen: event.target.checked })}/><span>{store.isOpen ? "مفتوح" : "مغلق"}</span></label></header>{store.status !== "active" && <div className="warning">الحساب موقوف من الإدارة ولا يمكن للتاجر إعادة تفعيله.</div>}{tab === "products" ? <Products session={session}/> : tab === "offers" ? <Offers session={session}/> : tab === "orders" ? <Orders session={session}/> : tab === "settings" ? <PushAndInstall session={session}/> : <section className="panel summary"><h2>ملخص المتجر</h2><p>{store.province} · {store.area}</p><p>{store.category}</p><p>حالة العرض للزبائن: {store.isOpen ? "مفتوح" : "مغلق حاليًا"}</p></section>}</main></div>;
+  return <div className="app"><aside><div className="identity">{store.imageUrl ? <img src={store.imageUrl} alt=""/> : <div className="logo">ع</div>}<div><h1>{store.name}</h1><p>{store.ownerName}</p></div><span className={`status ${store.status}`}>{store.status}</span></div><nav>{[["home", "الرئيسية"], ["products", "المنتجات"], ["offers", "عروض اليوم"], ["orders", "الطلبات"], ["settings", "إعدادات المتجر"]].map(([id, label]) => <button key={id} className={tab === id ? "active":""} onClick={() => setTab(id)}>{label}</button>)}</nav><button className="logout" onClick={onLogout}>تسجيل الخروج</button></aside><main><header className="page-head"><div><p className="eyebrow">لوحة التاجر</p><h2>{store.name}</h2></div><label className="switch"><input type="checkbox" checked={store.isOpen} disabled={store.status !== "active"} onChange={event => setOpen({ ...sessionArgs(session), isOpen: event.target.checked })}/><span>{store.isOpen ? "مفتوح" : "مغلق"}</span></label></header>{store.status !== "active" && <div className="warning">الحساب موقوف من الإدارة ولا يمكن للتاجر إعادة تفعيله.</div>}{tab === "products" ? <Products session={session}/> : tab === "offers" ? <Offers session={session}/> : tab === "orders" ? <Orders session={session}/> : tab === "settings" ? <MerchantSettings session={session} onPasswordChanged={onPasswordChanged}/> : <section className="panel summary"><h2>ملخص المتجر</h2><p>{store.province} · {store.area}</p><p>{store.category}</p><p>حالة العرض للزبائن: {store.isOpen ? "مفتوح" : "مغلق حاليًا"}</p></section>}</main></div>;
 }
 
-function AccountAccess({ session, onLogout }: { session: Session; onLogout: () => void }) {
+function AccountAccess({ session, onLogout, onPasswordChanged }: { session: Session; onLogout: () => void; onPasswordChanged: () => void }) {
   const access = useQuery(fn("merchant:accessStatus"), sessionArgs(session)) as { status: "active" | "suspended" | "deleted" | "expired" | "not_created" } | undefined;
   if (!access) return <State text="جارٍ التحقق من الحساب…"/>;
-  if (access.status === "active") return <Dashboard session={session} onLogout={onLogout}/>;
+  if (access.status === "active") return <Dashboard session={session} onLogout={onLogout} onPasswordChanged={onPasswordChanged}/>;
   const message = access.status === "deleted" ? deletedAccountMessage : access.status === "not_created" ? "الحساب لم يُنشأ بعد." : access.status === "suspended" ? "الحساب موقوف من الإدارة." : "انتهت جلسة الدخول. سجّل الدخول من جديد.";
   return <main className="login"><section className="panel login-card account-blocked"><img className="login-logo" src="./icons/icon-192.png" alt="علاكة سوق"/><h1>تعذر فتح لوحة التاجر</h1><div className="error">{message}</div><button className="primary" onClick={onLogout}>العودة إلى تسجيل الدخول</button></section></main>;
 }
 
 function App() {
   const initial = useMemo(() => { try { const value = JSON.parse(localStorage.getItem("alaqa_merchant_session") || "null"); return value?.expiresAt > Date.now() ? value : null; } catch { return null; } }, []);
-  const [session, setSession] = useState<Session | null>(initial); const signOut = useAction(fn("merchantAuth:signOut")); const unregister = useMutation(fn("merchant:unregisterPushDevice"));
+  const [session, setSession] = useState<Session | null>(initial); const [notice, setNotice] = useState(""); const signOut = useAction(fn("merchantAuth:signOut")); const unregister = useMutation(fn("merchant:unregisterPushDevice"));
   async function logout() { if (session) { try { await unregister({ ...sessionArgs(session), deviceId: deviceId() }); } catch {} try { await signOut({ sessionToken: session.sessionToken }); } catch {} } localStorage.removeItem("alaqa_merchant_session"); setSession(null); }
-  return session ? <AccountAccess session={session} onLogout={logout}/> : <Login onDone={setSession}/>;
+  function passwordChanged() { localStorage.removeItem("alaqa_merchant_session"); setNotice("تم تغيير كلمة المرور. سجّل الدخول بالكلمة الجديدة."); setSession(null); }
+  return session ? <AccountAccess session={session} onLogout={logout} onPasswordChanged={passwordChanged}/> : <Login onDone={value => { setNotice(""); setSession(value); }} notice={notice}/>;
 }
 
 createRoot(document.getElementById("root")!).render(<React.StrictMode><ConvexProvider client={convex}><App/></ConvexProvider></React.StrictMode>);

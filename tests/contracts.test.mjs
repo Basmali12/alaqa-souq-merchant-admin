@@ -44,3 +44,13 @@ test("deleted and missing merchant accounts have explicit permanent access messa
   assert.match(source, /الحساب لم يُنشأ بعد/);
   assert.match(source, /merchant:accessStatus/);
 });
+
+test("merchant signs in by phone and can change a password of eight characters or more", () => {
+  assert.match(source, /name="phone"/);
+  assert.match(source, /phone: String\(data\.get\("phone"\)\)/);
+  assert.doesNotMatch(source, /name="username"/);
+  assert.match(source, /merchantAuth:changePassword/);
+  assert.match(source, /name="currentPassword"/);
+  assert.match(source, /name="newPassword"[^>]*minLength=\{8\}/);
+  assert.match(source, /تم تغيير كلمة المرور/);
+});

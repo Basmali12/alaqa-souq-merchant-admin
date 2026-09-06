@@ -7,6 +7,7 @@ const courierManagement = fs.readFileSync(new URL("../src/courier-management.tsx
 const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
 const vite = fs.readFileSync(new URL("../vite.config.ts", import.meta.url), "utf8");
 const manifest = JSON.parse(fs.readFileSync(new URL("../public/manifest.webmanifest", import.meta.url), "utf8"));
+const serviceWorker = fs.readFileSync(new URL("../public/service-worker.js", import.meta.url), "utf8");
 const packageJson = JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url), "utf8"));
 
 test("GitHub Pages build uses relative assets and has no localhost dependency", () => {
@@ -38,6 +39,9 @@ test("Pushy registration stores the token through Convex and never embeds the se
   assert.match(source, /merchant:registerPushDevice/);
   assert.match(source, /window\.Pushy\.register/);
   assert.doesNotMatch(source, /SECRET_API_KEY|PUSHY_SECRET_API_KEY/);
+  assert.match(serviceWorker, /showNotification/);
+  assert.match(serviceWorker, /vibrate: \[250, 100, 250\]/);
+  assert.match(serviceWorker, /renotify: true/);
 });
 
 test("merchant orders expose only the next valid workflow action and customer location", () => {

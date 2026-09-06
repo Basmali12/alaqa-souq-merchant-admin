@@ -3,14 +3,30 @@ import fs from "node:fs";
 import test from "node:test";
 
 const source = fs.readFileSync(new URL("../src/main.tsx", import.meta.url), "utf8");
+const courierSource = fs.readFileSync(new URL("../src/couriers.tsx", import.meta.url), "utf8");
+const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
 const vite = fs.readFileSync(new URL("../vite.config.ts", import.meta.url), "utf8");
 const manifest = JSON.parse(fs.readFileSync(new URL("../public/manifest.webmanifest", import.meta.url), "utf8"));
+const courierManifest = JSON.parse(fs.readFileSync(new URL("../public/courier.webmanifest", import.meta.url), "utf8"));
 
 test("GitHub Pages build uses relative assets and has no localhost dependency", () => {
   assert.match(vite, /base:\s*"\.\/"/);
   assert.doesNotMatch(source, /localhost|127\.0\.0\.1/);
   assert.equal(manifest.start_url, "./");
   assert.equal(manifest.scope, "./");
+});
+
+test("merchant PWA uses the إدارة تاجر identity and supplied merchant artwork", () => {
+  assert.equal(manifest.name, "إدارة تاجر");
+  assert.equal(manifest.short_name, "إدارة تاجر");
+  assert.equal(manifest.icons[0].src, "./icons/merchant-192.png");
+  assert.equal(manifest.icons[1].src, "./icons/merchant-512.png");
+  assert.ok(fs.statSync(new URL("../public/icons/merchant-192.png", import.meta.url)).size > 0);
+  assert.ok(fs.statSync(new URL("../public/icons/merchant-512.png", import.meta.url)).size > 0);
+  assert.match(html, /<title>إدارة تاجر<\/title>/);
+  assert.match(html, /icons\/merchant-192\.png/);
+  assert.match(source, /icons\/merchant-512\.png/);
+  assert.match(source, /تثبيت إدارة تاجر/);
 });
 
 test("store hint never replaces server-side merchant session ownership", () => {
@@ -53,4 +69,42 @@ test("merchant signs in by phone and can change a password of eight characters o
   assert.match(source, /name="currentPassword"/);
   assert.match(source, /name="newPassword"[^>]*minLength=\{8\}/);
   assert.match(source, /تم تغيير كلمة المرور/);
+});
+
+test("merchant courier tab supports secure CRUD, invitation and order assignment", () => {
+  assert.match(source, /\["couriers", "المندوبون"\]/);
+  assert.match(courierSource, /courierAuth:create/);
+  assert.match(courierSource, /courier:updateForMerchant/);
+  assert.match(courierSource, /courier:setFrozenForMerchant/);
+  assert.match(courierSource, /courier:deleteForMerchant/);
+  assert.match(courierSource, /courier:assignOrder/);
+  assert.match(courierSource, /إرسال عبر واتساب/);
+  assert.match(courierSource, /name="password"[^>]*minLength=\{8\}/);
+  assert.doesNotMatch(courierSource, /PUSHY_SECRET_API_KEY|SECRET_API_KEY/);
+});
+
+test("courier PWA persists its session and blocks the dashboard until push registration", () => {
+  assert.match(courierSource, /alaqa_courier_session/);
+  assert.match(courierSource, /alaqa_courier_push_/);
+  assert.match(courierSource, /courier:registerPushDevice/);
+  assert.match(courierSource, /تفعيل الإشعارات مطلوب/);
+  assert.match(courierSource, /if \(!pushReady\) return <NotificationGate/);
+  assert.match(courierSource, /courier:listMyOrders/);
+});
+
+test("courier has its own brand assets and requires installation before sign-in", () => {
+  assert.equal(courierManifest.name, "مندوب علاكة سوك");
+  assert.equal(courierManifest.display, "standalone");
+  assert.equal(courierManifest.icons[0].src, "./icons/courier-192.png");
+  assert.equal(courierManifest.icons[1].src, "./icons/courier-512.png");
+  assert.ok(fs.statSync(new URL("../public/icons/courier-192.png", import.meta.url)).size > 0);
+  assert.ok(fs.statSync(new URL("../public/icons/courier-512.png", import.meta.url)).size > 0);
+  assert.match(courierSource, /if \(!standalone\) return <PwaInstallGate/);
+  assert.match(courierSource, /beforeinstallprompt/);
+  assert.match(courierSource, /navigator\.serviceWorker\.register/);
+  assert.match(courierSource, /serviceWorkerFile: `\$\{basePath\}service-worker\.js`/);
+  assert.match(html, /courier\.webmanifest/);
+  assert.match(html, /courier-192\.png/);
+  assert.match(courierSource, /إضافة إلى الشاشة الرئيسية/);
+  assert.match(courierSource, /افتح الرابط في Safari/);
 });

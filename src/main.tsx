@@ -4,6 +4,8 @@ import { ConvexProvider, ConvexReactClient, useAction, useMutation, useQuery } f
 import "./styles.css";
 import "./pwa.css";
 import "./password-settings.css";
+import "./couriers.css";
+import { CourierApp, CourierAssignment, Couriers } from "./couriers";
 
 const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL || "https://neighborly-badger-796.convex.cloud");
 const pushyAppId = import.meta.env.VITE_PUSHY_APP_ID || "6a2b4357a8bcff6c5eaec578";
@@ -52,7 +54,7 @@ function Login({ onDone, notice }: { onDone: (value: Session) => void; notice?: 
     finally { setBusy(false); }
   }
   return <main className="login"><form className="panel login-card" onSubmit={submit}>
-    <img className="login-logo" src="./icons/icon-192.png" alt="علاكة سوق"/><p className="eyebrow">علاكة سوق</p><h1>دخول التاجر</h1>
+    <img className="login-logo" src="./icons/merchant-512.png" alt="إدارة تاجر"/><p className="eyebrow">إدارة تاجر</p><h1>دخول التاجر</h1>
     <p>الرابط يساعد على تحديد المتجر فقط؛ ملكية الحساب تُفحص من الخادم.</p>
     {notice && <div className="success">{notice}</div>}
     <label>رقم الهاتف<input name="phone" type="tel" inputMode="tel" autoComplete="tel" required placeholder="07xxxxxxxxx"/></label>
@@ -128,7 +130,7 @@ function Orders({ session }: { session: Session }) {
   return <section><div className="toolbar"><h2>الطلبات</h2></div><div className="order-tabs">{groups.map(([id,label]) => <button className={group === id ? "active" : ""} key={id} onClick={() => setGroup(id)}>{label}<b>{rows.filter(order => normalizedGroup(order.status) === id).length}</b></button>)}</div>{error && <div className="error">{error}</div>}
     {visible.length === 0 ? <State text="لا توجد طلبات في هذه الحالة"/> : <div className="cards">{visible.map(order => { const action = next(order.status); const open = expanded === order.orderId; return <article id={`order-${order.orderId}`} className={`item order-card ${order.orderId === orderFromUrl ? "highlight" : ""}`} key={order.orderId}>
       <button className="order-summary" onClick={() => setExpanded(open ? "" : order.orderId)}><span><strong>طلب #{order.orderId.slice(0, 8)}</strong><small>{order.customerName || "زبون"} · {new Date(order.createdAt).toLocaleString("ar-IQ")}</small></span><b>{(order.total ?? 0).toLocaleString("ar-IQ")} د.ع</b><em>{statusLabel(order.status)}</em></button>
-      {open && <div className="order-detail"><h3>المنتجات</h3>{order.items?.length ? order.items.map((item:any) => <p key={item.productId}>{item.productName} × {item.quantity} — {(item.priceAtOrder * item.quantity).toLocaleString("ar-IQ")} د.ع</p>) : <p>{order.summary || "طلب قديم بلا تفاصيل منتجات"}</p>}<hr/><p><b>اسم الزبون:</b> {order.customerName || "غير مسجل"}</p><p><b>رقم الهاتف:</b> {order.phone || "غير مسجل"}</p><p><b>المحافظة:</b> {order.province || "غير مسجلة"}</p><p><b>أقرب نقطة دالة:</b> {order.landmark || "غير مسجلة"}</p><p><b>العنوان:</b> {order.address || "غير مسجل"}</p>{order.notes && <p><b>الملاحظات:</b> {order.notes}</p>}<p><b>الدفع:</b> الدفع عند الاستلام</p>{whatsappLink(order.phone) && <a className="map-link" href={whatsappLink(order.phone)} target="_blank" rel="noreferrer">مراسلة الزبون عبر واتساب</a>}{order.latitude != null && order.longitude != null && <a className="map-link" href={`geo:${order.latitude},${order.longitude}?q=${order.latitude},${order.longitude}`} target="_blank" rel="noreferrer">فتح موقع الزبون</a>}
+      {open && <div className="order-detail"><h3>المنتجات</h3>{order.items?.length ? order.items.map((item:any) => <p key={item.productId}>{item.productName} × {item.quantity} — {(item.priceAtOrder * item.quantity).toLocaleString("ar-IQ")} د.ع</p>) : <p>{order.summary || "طلب قديم بلا تفاصيل منتجات"}</p>}<hr/><p><b>اسم الزبون:</b> {order.customerName || "غير مسجل"}</p><p><b>رقم الهاتف:</b> {order.phone || "غير مسجل"}</p><p><b>المحافظة:</b> {order.province || "غير مسجلة"}</p><p><b>أقرب نقطة دالة:</b> {order.landmark || "غير مسجلة"}</p><p><b>العنوان:</b> {order.address || "غير مسجل"}</p>{order.notes && <p><b>الملاحظات:</b> {order.notes}</p>}<p><b>الدفع:</b> الدفع عند الاستلام</p>{whatsappLink(order.phone) && <a className="map-link" href={whatsappLink(order.phone)} target="_blank" rel="noreferrer">مراسلة الزبون عبر واتساب</a>}{order.latitude != null && order.longitude != null && <a className="map-link" href={`geo:${order.latitude},${order.longitude}?q=${order.latitude},${order.longitude}`} target="_blank" rel="noreferrer">فتح موقع الزبون</a>}<CourierAssignment session={session} order={order}/>
         <div className="actions">{order.status === "new" && <><button disabled={busy === order.orderId} onClick={() => change(order.orderId, "accepted")}>قبول</button><button className="danger" disabled={busy === order.orderId} onClick={() => change(order.orderId, "cancelled")}>رفض</button></>}{action && <button disabled={busy === order.orderId} onClick={() => change(order.orderId, action[0])}>{action[1]}</button>}</div></div>}
     </article>; })}</div>}</section>;
 }
@@ -146,7 +148,7 @@ function PushAndInstall({ session }: { session: Session }) {
     } catch (error) { setPushState(error instanceof Error ? error.message : "تعذر تفعيل الإشعارات"); }
   }
   async function install() { if (!installPrompt) return; await installPrompt.prompt(); await installPrompt.userChoice; setInstallPrompt(null); }
-  return <section className="panel settings-card"><h2>الجهاز والإشعارات</h2><p>فعّل الإشعارات لاستلام تنبيه مختصر عند وصول طلب جديد لمتجرك فقط.</p><div className="toolbar compact"><button className="primary" onClick={enablePush}>تفعيل إشعارات الطلبات</button>{installPrompt && <button className="ghost" onClick={install}>تثبيت لوحة الإدارة</button>}</div>{!installPrompt && <p className="install-help">يمكن تثبيت اللوحة من خيار «إضافة إلى الشاشة الرئيسية» في المتصفح.</p>}{pushState && <p className="push-state">{pushState}</p>}</section>;
+  return <section className="panel settings-card"><h2>الجهاز والإشعارات</h2><p>فعّل الإشعارات لاستلام تنبيه مختصر عند وصول طلب جديد لمتجرك فقط.</p><div className="toolbar compact"><button className="primary" onClick={enablePush}>تفعيل إشعارات الطلبات</button>{installPrompt && <button className="ghost" onClick={install}>تثبيت إدارة تاجر</button>}</div>{!installPrompt && <p className="install-help">يمكن تثبيت التطبيق من خيار «إضافة إلى الشاشة الرئيسية» في المتصفح.</p>}{pushState && <p className="push-state">{pushState}</p>}</section>;
 }
 
 function PasswordSettings({ session, onChanged }: { session: Session; onChanged: () => void }) {
@@ -177,7 +179,7 @@ function Dashboard({ session, onLogout, onPasswordChanged }: { session: Session;
   const store = useQuery(fn("merchant:dashboard"), sessionArgs(session)) as any; const setOpen = useMutation(fn("merchant:setOpen")); const [tab, setTab] = useState(orderFromUrl ? "orders" : "home");
   useEffect(() => { if (tab === "orders" && orderFromUrl) setTimeout(() => document.getElementById(`order-${orderFromUrl}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 100); }, [tab]);
   if (store === undefined) return <State text="جارٍ التحقق من ملكية المتجر…"/>;
-  return <div className="app"><aside><div className="identity">{store.imageUrl ? <img src={store.imageUrl} alt=""/> : <div className="logo">ع</div>}<div><h1>{store.name}</h1><p>{store.ownerName}</p></div><span className={`status ${store.status}`}>{store.status}</span></div><nav>{[["home", "الرئيسية"], ["products", "المنتجات"], ["offers", "عروض اليوم"], ["orders", "الطلبات"], ["settings", "إعدادات المتجر"]].map(([id, label]) => <button key={id} className={tab === id ? "active":""} onClick={() => setTab(id)}>{label}</button>)}</nav><button className="logout" onClick={onLogout}>تسجيل الخروج</button></aside><main><header className="page-head"><div><p className="eyebrow">لوحة التاجر</p><h2>{store.name}</h2></div><label className="switch"><input type="checkbox" checked={store.isOpen} disabled={store.status !== "active"} onChange={event => setOpen({ ...sessionArgs(session), isOpen: event.target.checked })}/><span>{store.isOpen ? "مفتوح" : "مغلق"}</span></label></header>{store.status !== "active" && <div className="warning">الحساب موقوف من الإدارة ولا يمكن للتاجر إعادة تفعيله.</div>}{tab === "products" ? <Products session={session}/> : tab === "offers" ? <Offers session={session}/> : tab === "orders" ? <Orders session={session}/> : tab === "settings" ? <MerchantSettings session={session} onPasswordChanged={onPasswordChanged}/> : <section className="panel summary"><h2>ملخص المتجر</h2><p>{store.province} · {store.area}</p><p>{store.category}</p><p>حالة العرض للزبائن: {store.isOpen ? "مفتوح" : "مغلق حاليًا"}</p></section>}</main></div>;
+  return <div className="app"><aside><div className="identity">{store.imageUrl ? <img src={store.imageUrl} alt=""/> : <div className="logo">ع</div>}<div><h1>{store.name}</h1><p>{store.ownerName}</p></div><span className={`status ${store.status}`}>{store.status}</span></div><nav>{[["home", "الرئيسية"], ["products", "المنتجات"], ["offers", "عروض اليوم"], ["orders", "الطلبات"], ["couriers", "المندوبون"], ["settings", "إعدادات المتجر"]].map(([id, label]) => <button key={id} className={tab === id ? "active":""} onClick={() => setTab(id)}>{label}</button>)}</nav><button className="logout" onClick={onLogout}>تسجيل الخروج</button></aside><main><header className="page-head"><div><p className="eyebrow">لوحة التاجر</p><h2>{store.name}</h2></div><label className="switch"><input type="checkbox" checked={store.isOpen} disabled={store.status !== "active"} onChange={event => setOpen({ ...sessionArgs(session), isOpen: event.target.checked })}/><span>{store.isOpen ? "مفتوح" : "مغلق"}</span></label></header>{store.status !== "active" && <div className="warning">الحساب موقوف من الإدارة ولا يمكن للتاجر إعادة تفعيله.</div>}{tab === "products" ? <Products session={session}/> : tab === "offers" ? <Offers session={session}/> : tab === "orders" ? <Orders session={session}/> : tab === "couriers" ? <Couriers session={session}/> : tab === "settings" ? <MerchantSettings session={session} onPasswordChanged={onPasswordChanged}/> : <section className="panel summary"><h2>ملخص المتجر</h2><p>{store.province} · {store.area}</p><p>{store.category}</p><p>حالة العرض للزبائن: {store.isOpen ? "مفتوح" : "مغلق حاليًا"}</p></section>}</main></div>;
 }
 
 function AccountAccess({ session, onLogout, onPasswordChanged }: { session: Session; onLogout: () => void; onPasswordChanged: () => void }) {
@@ -185,7 +187,7 @@ function AccountAccess({ session, onLogout, onPasswordChanged }: { session: Sess
   if (!access) return <State text="جارٍ التحقق من الحساب…"/>;
   if (access.status === "active") return <Dashboard session={session} onLogout={onLogout} onPasswordChanged={onPasswordChanged}/>;
   const message = access.status === "deleted" ? deletedAccountMessage : access.status === "not_created" ? "الحساب لم يُنشأ بعد." : access.status === "suspended" ? "الحساب موقوف من الإدارة." : "انتهت جلسة الدخول. سجّل الدخول من جديد.";
-  return <main className="login"><section className="panel login-card account-blocked"><img className="login-logo" src="./icons/icon-192.png" alt="علاكة سوق"/><h1>تعذر فتح لوحة التاجر</h1><div className="error">{message}</div><button className="primary" onClick={onLogout}>العودة إلى تسجيل الدخول</button></section></main>;
+  return <main className="login"><section className="panel login-card account-blocked"><img className="login-logo" src="./icons/merchant-512.png" alt="إدارة تاجر"/><h1>تعذر فتح إدارة تاجر</h1><div className="error">{message}</div><button className="primary" onClick={onLogout}>العودة إلى تسجيل الدخول</button></section></main>;
 }
 
 function App() {
@@ -196,4 +198,10 @@ function App() {
   return session ? <AccountAccess session={session} onLogout={logout} onPasswordChanged={passwordChanged}/> : <Login onDone={value => { setNotice(""); setSession(value); }} notice={notice}/>;
 }
 
-createRoot(document.getElementById("root")!).render(<React.StrictMode><ConvexProvider client={convex}><App/></ConvexProvider></React.StrictMode>);
+const courierMode = urlParams.get("role") === "courier";
+if (courierMode) {
+  document.title = "مندوب علاكة سوك";
+  document.querySelector<HTMLLinkElement>('link[rel="manifest"]')?.setAttribute("href", "./courier.webmanifest");
+  document.querySelector<HTMLLinkElement>('link[rel="icon"]')?.setAttribute("href", "./icons/courier-192.png");
+}
+createRoot(document.getElementById("root")!).render(<React.StrictMode><ConvexProvider client={convex}>{courierMode ? <CourierApp/> : <App/>}</ConvexProvider></React.StrictMode>);

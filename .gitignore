@@ -3,5 +3,6 @@
 !.env.example
 node_modules/
 dist/
+dist-courier/
 *.log
 .DS_Store

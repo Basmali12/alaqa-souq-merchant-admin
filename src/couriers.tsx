@@ -12,10 +12,11 @@ const courierArgs = (session: CourierSession) => ({ sessionToken: session.sessio
 const phoneForWhatsApp = (value: string) => value.replace(/\D/g, "").replace(/^0/, "964");
 
 function courierUrl(courierId: string, storeId: string) {
-  const url = new URL(location.href);
+  const dedicatedUrl = import.meta.env.VITE_COURIER_APP_URL?.trim();
+  const url = new URL(dedicatedUrl || (location.hostname === "basmali12.github.io" ? `${location.origin}/alaqa-souq-courier/` : location.href));
   url.search = "";
   url.hash = "";
-  url.searchParams.set("role", "courier");
+  if (!dedicatedUrl && location.hostname !== "basmali12.github.io") url.searchParams.set("role", "courier");
   url.searchParams.set("store", storeId);
   url.searchParams.set("courier", courierId);
   return url.toString();
@@ -147,7 +148,7 @@ function CourierLogin({ onDone }: { onDone: (session: CourierSession) => void })
 
 function NotificationGate({ session, onDone }: { session: CourierSession; onDone: () => void }) {
   const register = useMutation(fn("courier:registerPushDevice")); const [state, setState] = useState("");
-  async function enable() { setState("جارٍ طلب إذن الإشعارات…"); try { if (!window.Pushy) throw new Error("تعذر تحميل خدمة الإشعارات"); const basePath = new URL(import.meta.env.BASE_URL, location.href).pathname; const deviceToken = await window.Pushy.register({ appId: pushyAppId, serviceWorkerFile: `${basePath}service-worker.js`, serviceWorkerScope: basePath }); await register({ ...courierArgs(session), deviceId: courierDeviceId(), deviceToken }); localStorage.setItem(`alaqa_courier_push_${session.courierId}`, "enabled"); onDone(); } catch (cause) { setState(cause instanceof Error ? cause.message : "يجب السماح بالإشعارات للمتابعة."); } }
+  async function enable() { setState("جارٍ طلب إذن الإشعارات…"); try { if (!window.Pushy) throw new Error("تعذر تحميل خدمة الإشعارات"); const basePath = new URL(import.meta.env.BASE_URL, location.href).pathname; const serviceWorkerFile = `${basePath.replace(/^\/+/, "")}service-worker.js`; const deviceToken = await window.Pushy.register({ appId: pushyAppId, serviceWorkerFile, serviceWorkerScope: basePath }); await register({ ...courierArgs(session), deviceId: courierDeviceId(), deviceToken }); localStorage.setItem(`alaqa_courier_push_${session.courierId}`, "enabled"); onDone(); } catch (cause) { setState(cause instanceof Error ? cause.message : "يجب السماح بالإشعارات للمتابعة."); } }
   return <main className="login"><section className="panel login-card notification-gate"><img className="courier-brand-image" src="./icons/courier-512.png" alt="مندوب علاكة سوك"/><h1>تفعيل الإشعارات مطلوب</h1><p>حتى يصلك تنبيه «لديك طلب» فور اختيارك من التاجر، وافق على إذن الإشعارات في هذا الجهاز.</p><button className="primary" onClick={enable}>تفعيل الإشعارات والمتابعة</button>{state && <div className="warning">{state}</div>}</section></main>;
 }
 

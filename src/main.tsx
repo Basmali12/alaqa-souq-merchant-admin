@@ -198,7 +198,7 @@ function App() {
   return session ? <AccountAccess session={session} onLogout={logout} onPasswordChanged={passwordChanged}/> : <Login onDone={value => { setNotice(""); setSession(value); }} notice={notice}/>;
 }
 
-const courierMode = urlParams.get("role") === "courier";
+const courierMode = import.meta.env.MODE === "courier" || urlParams.get("role") === "courier";
 if (courierMode) {
   document.title = "مندوب علاكة سوك";
   document.querySelector<HTMLLinkElement>('link[rel="manifest"]')?.setAttribute("href", "./courier.webmanifest");

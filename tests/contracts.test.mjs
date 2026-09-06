@@ -8,6 +8,7 @@ const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
 const vite = fs.readFileSync(new URL("../vite.config.ts", import.meta.url), "utf8");
 const manifest = JSON.parse(fs.readFileSync(new URL("../public/manifest.webmanifest", import.meta.url), "utf8"));
 const courierManifest = JSON.parse(fs.readFileSync(new URL("../public/courier.webmanifest", import.meta.url), "utf8"));
+const packageJson = JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url), "utf8"));
 
 test("GitHub Pages build uses relative assets and has no localhost dependency", () => {
   assert.match(vite, /base:\s*"\.\/"/);
@@ -79,6 +80,7 @@ test("merchant courier tab supports secure CRUD, invitation and order assignment
   assert.match(courierSource, /courier:deleteForMerchant/);
   assert.match(courierSource, /courier:assignOrder/);
   assert.match(courierSource, /إرسال عبر واتساب/);
+  assert.match(courierSource, /alaqa-souq-courier/);
   assert.match(courierSource, /name="password"[^>]*minLength=\{8\}/);
   assert.doesNotMatch(courierSource, /PUSHY_SECRET_API_KEY|SECRET_API_KEY/);
 });
@@ -102,7 +104,12 @@ test("courier has its own brand assets and requires installation before sign-in"
   assert.match(courierSource, /if \(!standalone\) return <PwaInstallGate/);
   assert.match(courierSource, /beforeinstallprompt/);
   assert.match(courierSource, /navigator\.serviceWorker\.register/);
-  assert.match(courierSource, /serviceWorkerFile: `\$\{basePath\}service-worker\.js`/);
+  assert.match(courierSource, /basePath\.replace\(\/\^\\\/\+\/, ""\)/);
+  assert.match(courierSource, /appId: pushyAppId, serviceWorkerFile, serviceWorkerScope: basePath/);
+  assert.match(source, /import\.meta\.env\.MODE === "courier"/);
+  assert.match(packageJson.scripts["build:courier"], /--mode courier/);
+  assert.match(vite, /courier-pwa-identity/);
+  assert.match(vite, /courier\.webmanifest/);
   assert.match(html, /courier\.webmanifest/);
   assert.match(html, /courier-192\.png/);
   assert.match(courierSource, /إضافة إلى الشاشة الرئيسية/);

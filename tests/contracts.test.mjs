@@ -38,7 +38,8 @@ test("store hint never replaces server-side merchant session ownership", () => {
 
 test("Pushy registration stores the token through Convex and never embeds the secret", () => {
   assert.match(pushSource, /merchant:registerPushDevice/);
-  assert.match(pushSource, /window\.Pushy\.register/);
+  assert.match(pushSource, /registerScopedPush\(appId, current\)/);
+  assert.doesNotMatch(html, /sdk\.pushy\.me/);
   assert.match(source, /useMerchantPush\(session, deviceId, pushyAppId\)/);
   assert.doesNotMatch(source + pushSource, /SECRET_API_KEY|PUSHY_SECRET_API_KEY/);
   assert.match(serviceWorker, /showNotification/);

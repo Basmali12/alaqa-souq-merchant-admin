@@ -60,6 +60,22 @@ try {
   await page.click("#unlock");
   assert.equal(await page.evaluate(async()=>{await window.unlockPromise;return window.engine.play("offline-restart");}),true);
   assert.equal(await page.evaluate(()=>window.engine.play("order-1")),false);
+  if (appRoot.endsWith('merchant-admin-web') || appRoot.endsWith('courier-web')) {
+    await page.evaluate(async()=>{
+      window.engine.dispose();
+      const {LocalSound}=await import('/src/local-sound.ts');
+      window.engine=new LocalSound('test_sound','qa');
+      window.engine.activate();
+      // A normal interaction, not a second press of the enable-sound control.
+      document.querySelector('#unlock').onclick=null;
+    });
+    assert.equal(await page.evaluate(()=>window.engine.optedIn),true);
+    await page.click('#unlock');
+    await page.waitForFunction(()=>window.engine.ready);
+    assert.equal(await page.evaluate(()=>window.engine.play('restored-without-reenable')),true);
+    assert.equal(downloads,2);
+    await page.evaluate(()=>document.querySelector('#unlock').onclick=()=>window.unlockPromise=window.engine.unlock());
+  }
   await page.evaluate(async()=>{
     window.engine.dispose();
     const c=await caches.open("alaqa-sound-test_sound");

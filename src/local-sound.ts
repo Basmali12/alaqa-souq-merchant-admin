@@ -12,12 +12,38 @@ export class LocalSound {
   }
   get key() { return new URL(`__sound__/${this.type}`, location.origin).href; }
   get ready() { return !!this.buffer && this.context?.state === "running"; }
-  activate() { this.disposed = false; }
+  get optedIn() { try { return localStorage.getItem(`sound-enabled-${this.type}-${this.actor}`) === '1'; } catch { return false; } }
+  private interaction = (event: Event) => {
+    if (event.isTrusted && this.optedIn && !this.ready) this.restore();
+  };
+  private visibility = () => { if (!document.hidden && this.optedIn) this.restore(); };
+  private audioContext() {
+    this.context ??= new AudioContext();
+    this.context.onstatechange = () => { if (!this.disposed) this.changed(); };
+    return this.context;
+  }
+  private restore() {
+    if (this.disposed || !this.optedIn || this.config?.enabled === false) return;
+    try {
+      const context = this.audioContext();
+      // Browsers may leave this promise pending until a genuine user gesture.
+      // Saved consent is reused; autoplay policy is never overridden.
+      void context.resume().then(() => { if (!this.disposed) this.changed(); }).catch(() => {});
+      void this.loadLocal().then(() => { if (!this.disposed) this.changed(); }).catch(() => this.log('cache-failure'));
+    } catch { this.log('resume-blocked'); }
+  }
+  activate() {
+    this.disposed = false;
+    document.addEventListener('pointerup', this.interaction);
+    document.addEventListener('keydown', this.interaction);
+    document.addEventListener('visibilitychange', this.visibility);
+    this.restore();
+  }
   log(status: string) { console.info("notification-sound", { type: this.type, version: this.config?.version, status }); }
   async unlock() {
-    this.context ??= new AudioContext();
-    await this.context.resume();
-    if (this.context.state !== "running") throw new Error("AUDIO_BLOCKED");
+    const context = this.audioContext();
+    await context.resume();
+    if (context.state !== "running") throw new Error("AUDIO_BLOCKED");
     localStorage.setItem(`sound-enabled-${this.type}-${this.actor}`, "1");
     await this.loadLocal();
     this.changed();
@@ -61,7 +87,8 @@ export class LocalSound {
     const cached = await (await caches.open(this.cacheName)).match(this.key);
     if (!cached || cached.headers.get("x-sound-enabled") !== "true") return;
     if (this.config && cached.headers.get("x-sound-version") !== String(this.config.version)) return;
-    try { this.buffer = await this.context.decodeAudioData(await cached.arrayBuffer()); }
+    const context = this.context;
+    try { const decoded = await context.decodeAudioData(await cached.arrayBuffer()); if (!this.disposed && this.context === context) this.buffer = decoded; }
     catch { this.buffer = null; await (await caches.open(this.cacheName)).delete(this.key); this.log("decode-failure"); }
   }
   async play(eventId: string) {
@@ -83,5 +110,13 @@ export class LocalSound {
     try { return navigator.locks ? await navigator.locks.request(`sound-${this.type}-${this.actor}`, run) : await run(); }
     catch { this.log("play-failure"); return false; }
   }
-  dispose() { this.disposed = true; this.source?.stop(); void this.context?.close(); this.context = null; this.buffer = null; }
+  dispose() {
+    this.disposed = true;
+    document.removeEventListener('pointerup', this.interaction);
+    document.removeEventListener('keydown', this.interaction);
+    document.removeEventListener('visibilitychange', this.visibility);
+    this.source?.stop(); this.source = null;
+    if (this.context) { this.context.onstatechange = null; void this.context.close().catch(() => {}); }
+    this.context = null; this.buffer = null;
+  }
 }

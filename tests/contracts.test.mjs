@@ -3,6 +3,7 @@ import fs from "node:fs";
 import test from "node:test";
 
 const source = fs.readFileSync(new URL("../src/main.tsx", import.meta.url), "utf8");
+const pushSource = fs.readFileSync(new URL("../src/merchant-push.tsx", import.meta.url), "utf8");
 const courierManagement = fs.readFileSync(new URL("../src/courier-management.tsx", import.meta.url), "utf8");
 const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
 const vite = fs.readFileSync(new URL("../vite.config.ts", import.meta.url), "utf8");
@@ -36,9 +37,10 @@ test("store hint never replaces server-side merchant session ownership", () => {
 });
 
 test("Pushy registration stores the token through Convex and never embeds the secret", () => {
-  assert.match(source, /merchant:registerPushDevice/);
-  assert.match(source, /window\.Pushy\.register/);
-  assert.doesNotMatch(source, /SECRET_API_KEY|PUSHY_SECRET_API_KEY/);
+  assert.match(pushSource, /merchant:registerPushDevice/);
+  assert.match(pushSource, /window\.Pushy\.register/);
+  assert.match(source, /useMerchantPush\(session, deviceId, pushyAppId\)/);
+  assert.doesNotMatch(source + pushSource, /SECRET_API_KEY|PUSHY_SECRET_API_KEY/);
   assert.match(serviceWorker, /showNotification/);
   assert.match(serviceWorker, /vibrate: \[250, 100, 250\]/);
   assert.match(serviceWorker, /renotify: true/);
@@ -62,7 +64,7 @@ test("merchant keeps assigned orders in outgoing for seven days and exposes deli
   assert.match(source, /7 \* 24 \* 60 \* 60 \* 1000/);
   assert.match(source, /merchant:setDeliveryFee/);
   assert.match(source, /كلفة التوصيل/);
-  assert.match(source, /Notification\.requestPermission/);
+  assert.match(pushSource, /Notification\.requestPermission/);
 });
 
 test("deleted and missing merchant accounts have explicit permanent access messages", () => {

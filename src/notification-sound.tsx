@@ -27,7 +27,8 @@ function SoundControl({ sessionToken, actor, storeId }: SoundProps) {
   }, [orders, engine]);
   async function enable() { try { await engine.unlock(); setError(""); } catch { setError("اضغط مجددًا لتفعيل الصوت؛ قد يمنعه المتصفح."); } }
   return <section className="panel" style={{ padding: 12, marginBottom: 12 }} aria-label="صوت الإشعارات">
-    <button type="button" onClick={enable} disabled={config?.enabled === false}>{engine.ready ? "صوت الإشعارات مفعّل" : "تفعيل صوت الإشعارات"}</button>
+    <button type="button" onClick={enable} disabled={config?.enabled === false || engine.ready}>{engine.ready ? "صوت الإشعارات مفعّل" : engine.optedIn ? "الصوت محفوظ — اضغط لاستئناف التشغيل" : "تفعيل صوت الإشعارات"}</button>
+    {engine.optedIn && !engine.ready && config?.enabled !== false && <small style={{display:'block'}}>اختيارك محفوظ. إذا أوقف المتصفح الصوت، تُستعاد جاهزيته مع أول لمسة داخل الصفحة حيث يسمح المتصفح.</small>}
     <small style={{ display: "block", marginTop: 6 }}>{config === null ? "لم تضف الإدارة صوتًا بعد." : config?.enabled === false ? "الصوت المخصص معطّل من الإدارة." : "الصوت المخصص أثناء فتح الصفحة؛ خارج التطبيق يصلك تنبيه النظام."}</small>
     {error && <p role="status">{error}</p>}
   </section>;

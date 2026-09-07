@@ -7,6 +7,7 @@ import "./password-settings.css";
 import { CourierAssignment, Couriers } from "./courier-management";
 import { AppUpdateNotice } from "./app-update";
 import { NotificationSound } from "./notification-sound";
+import { MerchantPushContext, useMerchantPush, useMerchantPushState } from "./merchant-push";
 
 const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL || "https://neighborly-badger-796.convex.cloud");
 const pushyAppId = import.meta.env.VITE_PUSHY_APP_ID || "6a2b4357a8bcff6c5eaec578";
@@ -139,22 +140,12 @@ function Orders({ session }: { session: Session }) {
 }
 
 function PushAndInstall({ session }: { session: Session }) {
-  const registerDevice = useMutation(fn("merchant:registerPushDevice")); const [pushState, setPushState] = useState(""); const [installPrompt, setInstallPrompt] = useState<InstallPrompt | null>(null);
+  const push = useMerchantPushState();
+  const [installPrompt, setInstallPrompt] = useState<InstallPrompt | null>(null);
   useEffect(() => { const listener = (event: Event) => { event.preventDefault(); setInstallPrompt(event as InstallPrompt); }; window.addEventListener("beforeinstallprompt", listener); return () => window.removeEventListener("beforeinstallprompt", listener); }, []);
-  async function enablePush() {
-    setPushState("جارٍ طلب الإذن…");
-    try {
-      if (!("Notification" in window)) throw new Error("هذا المتصفح لا يدعم الإشعارات");
-      const permission = Notification.permission === "granted" ? "granted" : await Notification.requestPermission();
-      if (permission !== "granted") throw new Error("يجب السماح بالإشعارات من إعدادات المتصفح ثم المحاولة مجددًا");
-      if (!window.Pushy) throw new Error("تعذر تحميل خدمة الإشعارات");
-      const basePath = new URL(import.meta.env.BASE_URL, location.href).pathname; const serviceWorkerFile = `${basePath.replace(/^\/+/, "")}service-worker.js`;
-      const deviceToken = await window.Pushy.register({ appId: pushyAppId, serviceWorkerFile, serviceWorkerScope: basePath });
-      await registerDevice({ ...sessionArgs(session), deviceId: deviceId(), deviceToken }); setPushState("تم تفعيل إشعارات الطلبات لهذا الجهاز");
-    } catch (error) { setPushState(error instanceof Error ? error.message : "تعذر تفعيل الإشعارات"); }
-  }
   async function install() { if (!installPrompt) return; await installPrompt.prompt(); await installPrompt.userChoice; setInstallPrompt(null); }
-  return <section className="panel settings-card"><h2>الجهاز والإشعارات</h2><p>فعّل الإشعارات لاستلام تنبيه مختصر عند وصول طلب جديد لمتجرك فقط.</p><div className="toolbar compact"><button className="primary" onClick={enablePush}>تفعيل إشعارات الطلبات</button>{installPrompt && <button className="ghost" onClick={install}>تثبيت إدارة تاجر</button>}</div>{!installPrompt && <p className="install-help">يمكن تثبيت التطبيق من خيار «إضافة إلى الشاشة الرئيسية» في المتصفح.</p>}{pushState && <p className="push-state">{pushState}</p>}</section>;
+  const label = push.state === "ready" ? "الإشعارات مفعّلة على هذا الجهاز" : push.state === "checking" ? "جارٍ التحقق من اتصال الإشعارات…" : push.saved ? "إعادة التحقق من الإشعارات" : "تفعيل إشعارات الطلبات";
+  return <section className="panel settings-card"><h2>الجهاز والإشعارات</h2><p>يُحفظ التفعيل لهذا الجهاز ويُستعاد تلقائيًا عند الدخول؛ لا تحتاج إعادة التفعيل كل مرة.</p><div className="toolbar compact"><button className="primary" disabled={push.state === "ready" || push.state === "checking" || push.state === "unsupported"} onClick={() => void push.enable()}>{label}</button>{installPrompt && <button className="ghost" onClick={install}>تثبيت إدارة تاجر</button>}</div>{!installPrompt && <p className="install-help">يمكن تثبيت التطبيق من خيار «إضافة إلى الشاشة الرئيسية» في المتصفح.</p>}{push.state === "error" && <p role="status">تعذر التحقق من الاتصال الآن. التفعيل المحفوظ لم يُحذف؛ أعد المحاولة عند توفر الإنترنت.</p>}{push.state === "denied" && <p role="status">إذن الإشعارات محظور في إعدادات المتصفح لهذا الموقع؛ اسمح به ثم أعد التحقق.</p>}{push.state === "unsupported" && <p role="status">هذا المتصفح لا يدعم إشعارات الويب.</p>}</section>;
 }
 
 function PasswordSettings({ session, onChanged }: { session: Session; onChanged: () => void }) {
@@ -204,9 +195,10 @@ function AccountAccess({ session, onLogout, onPasswordChanged }: { session: Sess
 function App() {
   const initial = useMemo(() => { try { const value = JSON.parse(localStorage.getItem("alaqa_merchant_session") || "null"); return value?.expiresAt > Date.now() ? value : null; } catch { return null; } }, []);
   const [session, setSession] = useState<Session | null>(initial); const [notice, setNotice] = useState(""); const signOut = useAction(fn("merchantAuth:signOut")); const unregister = useMutation(fn("merchant:unregisterPushDevice"));
-  async function logout() { if (session) { try { await unregister({ ...sessionArgs(session), deviceId: deviceId() }); } catch {} try { await signOut({ sessionToken: session.sessionToken }); } catch {} } localStorage.removeItem("alaqa_merchant_session"); setSession(null); }
+  const push = useMerchantPush(session, deviceId, pushyAppId);
+  async function logout() { await push.stop(); if (session) { try { await unregister({ ...sessionArgs(session), deviceId: deviceId() }); } catch {} try { await signOut({ sessionToken: session.sessionToken }); } catch {} } localStorage.removeItem("alaqa_merchant_session"); setSession(null); }
   function passwordChanged() { localStorage.removeItem("alaqa_merchant_session"); setNotice("تم تغيير كلمة المرور. سجّل الدخول بالكلمة الجديدة."); setSession(null); }
-  return <><AppUpdateNotice/>{session ? <AccountAccess session={session} onLogout={logout} onPasswordChanged={passwordChanged}/> : <Login onDone={value => { setNotice(""); setSession(value); }} notice={notice}/>}</>;
+  return <MerchantPushContext.Provider value={push}><AppUpdateNotice/>{session ? <AccountAccess session={session} onLogout={logout} onPasswordChanged={passwordChanged}/> : <Login onDone={value => { setNotice(""); setSession(value); }} notice={notice}/>}</MerchantPushContext.Provider>;
 }
 
 createRoot(document.getElementById("root")!).render(<React.StrictMode><ConvexProvider client={convex}><App/></ConvexProvider></React.StrictMode>);

@@ -4,6 +4,7 @@ import { ConvexProvider, ConvexReactClient, useAction, useMutation, useQuery } f
 import "./styles.css";
 import "./pwa.css";
 import "./password-settings.css";
+import { StoreLocation } from "./store-location";
 import { CourierAssignment, Couriers } from "./courier-management";
 import { AppUpdateNotice } from "./app-update";
 import { NotificationSound } from "./notification-sound";
@@ -172,7 +173,7 @@ function MerchantSettings({ session, onPasswordChanged }: { session: Session; on
   const [fee, setFee] = useState(0); const [saved, setSaved] = useState("");
   useEffect(() => { if (dashboard) setFee(dashboard.deliveryFee ?? 0); }, [dashboard?.deliveryFee]);
   async function saveFee() { setSaved(""); await setDeliveryFee({ ...sessionArgs(session), deliveryFee: fee }); setSaved("تم حفظ كلفة التوصيل للطلبات الجديدة."); }
-  return <div className="settings-stack"><section className="panel settings-card"><h2>كلفة التوصيل</h2><p>تُضاف تلقائيًا إلى إجمالي الطلب الجديد وتظهر للزبون والتاجر والمندوب.</p><label>كلفة التوصيل بالدينار<input type="number" min="0" max="100000" step="250" value={fee} onChange={event => setFee(Number(event.target.value))}/></label><button className="primary" onClick={saveFee}>حفظ كلفة التوصيل</button>{saved && <div className="success">{saved}</div>}</section><PasswordSettings session={session} onChanged={onPasswordChanged}/><PushAndInstall session={session}/></div>;
+return <div className="settings-stack"><StoreLocation {...sessionArgs(session)} confirmed={!!dashboard?.locationConfirmedAt}/><section className="panel settings-card"><h2>كلفة التوصيل</h2><p>تُضاف تلقائيًا إلى إجمالي الطلب الجديد وتظهر للزبون والتاجر والمندوب.</p><label>كلفة التوصيل بالدينار<input type="number" min="0" max="100000" step="250" value={fee} onChange={event => setFee(Number(event.target.value))}/></label><button className="primary" onClick={saveFee}>حفظ كلفة التوصيل</button>{saved && <div className="success">{saved}</div>}</section><PasswordSettings session={session} onChanged={onPasswordChanged}/><PushAndInstall session={session}/></div>;
 }
 
 function State({ text }: { text: string }) { return <div className="state">{text}</div>; }
@@ -181,6 +182,7 @@ function Dashboard({ session, onLogout, onPasswordChanged }: { session: Session;
   const store = useQuery(fn("merchant:dashboard"), sessionArgs(session)) as any; const setOpen = useMutation(fn("merchant:setOpen")); const [tab, setTab] = useState(orderFromUrl ? "orders" : "home");
   useEffect(() => { if (tab === "orders" && orderFromUrl) setTimeout(() => document.getElementById(`order-${orderFromUrl}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 100); }, [tab]);
   if (store === undefined) return <State text="جارٍ التحقق من ملكية المتجر…"/>;
+  if (!store.locationConfirmedAt) return <main><StoreLocation {...sessionArgs(session)} confirmed={false}/><button onClick={onLogout}>تسجيل الخروج</button></main>;
   return <div className="app"><aside><div className="identity">{store.imageUrl ? <img src={store.imageUrl} alt=""/> : <div className="logo">ع</div>}<div><h1>{store.name}</h1><p>{store.ownerName}</p></div><span className={`status ${store.status}`}>{store.status}</span></div><nav>{[["home", "الرئيسية"], ["products", "المنتجات"], ["offers", "عروض اليوم"], ["orders", "الطلبات"], ["couriers", "المندوبون"], ["settings", "إعدادات المتجر"]].map(([id, label]) => <button key={id} className={tab === id ? "active":""} onClick={() => setTab(id)}>{label}</button>)}</nav><button className="logout" onClick={onLogout}>تسجيل الخروج</button></aside><main><header className="page-head"><div><p className="eyebrow">لوحة التاجر</p><h2>{store.name}</h2></div><label className="switch"><input type="checkbox" checked={store.isOpen} disabled={store.status !== "active"} onChange={event => setOpen({ ...sessionArgs(session), isOpen: event.target.checked })}/><span>{store.isOpen ? "مفتوح" : "مغلق"}</span></label></header><NotificationSound sessionToken={session.sessionToken} actor={session.storeId} storeId={session.storeId}/>{store.status !== "active" && <div className="warning">الحساب موقوف من الإدارة ولا يمكن للتاجر إعادة تفعيله.</div>}{tab === "products" ? <Products session={session}/> : tab === "offers" ? <Offers session={session}/> : tab === "orders" ? <Orders session={session}/> : tab === "couriers" ? <Couriers session={session}/> : tab === "settings" ? <MerchantSettings session={session} onPasswordChanged={onPasswordChanged}/> : <section className="panel summary"><h2>ملخص المتجر</h2><p>{store.province} · {store.area}</p><p>{store.category}</p><p>حالة العرض للزبائن: {store.isOpen ? "مفتوح" : "مغلق حاليًا"}</p></section>}</main></div>;
 }
 
